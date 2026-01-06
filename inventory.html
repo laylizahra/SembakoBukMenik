@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sembako Inventory Checker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    animation: {
+                        'fade-in': 'fadeIn 0.5s ease-in-out',
+                    },
+                    keyframes: {
+                        fadeIn: {
+                            '0%': { opacity: '0', transform: 'translateY(20px)' },
+                            '100%': { opacity: '1', transform: 'translateY(0)' },
+                        },
+                    },
+                },
+            },
+        };
+    </script>
+</head>
+<body class="bg-gradient-to-br from-green-100 to-blue-100 min-h-screen font-sans">
+    <div class="container mx-auto px-4 py-8">
+        <!-- Header -->
+        <header class="text-center mb-8 animate-fade-in">
+            <h1 class="text-4xl font-bold text-gray-800 mb-2">Toko Sembako Bu Menik</h1>
+            <p class="text-lg text-gray-600">Mengelola Harga dan Kalkulator Pembelian</p>
+            <button id="reset-all-btn" class="mt-4 bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300">Reset Semua Data</button>
+        </header>
+
+        <!-- Add Product Form -->
+        <div class="bg-white rounded-lg shadow-lg p-6 mb-8 animate-fade-in">
+            <h2 class="text-2xl font-semibold text-gray-800 mb-4">Tambah Produk Baru</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <input type="text" id="new-name" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent" placeholder="Nama Produk (e.g., Beras Cap Ayam)">
+                <input type="number" id="new-price" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent" placeholder="Harga (Rp)" min="0">
+                <input type="url" id="new-image" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent" placeholder="URL Gambar (opsional)">
+            </div>
+            <button id="add-product-btn" class="mt-4 bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-6 rounded-lg transition duration-300">Tambah Produk</button>
+        </div>
+
+        <!-- Main Content: Inventory and Calculator -->
+        <div class="flex flex-col lg:flex-row gap-8">
+            <!-- Inventory Section (50%) -->
+            <div class="w-full lg:w-1/2">
+                <h2 class="text-2xl font-semibold text-gray-800 mb-4">Inventori Produk</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6" id="inventory-list">
+                    <!-- Products will be dynamically generated here -->
+                </div>
+            </div>
+
+            <!-- Calculator Section (50%) -->
+            <div class="w-full lg:w-1/2">
+                <h2 class="text-2xl font-semibold text-gray-800 mb-4">Kalkulator Pembelian</h2>
+                <div class="bg-white rounded-lg shadow-lg p-6">
+                    <div id="calculator-items" class="mb-4">
+                        <!-- Calculator items will be dynamically generated here -->
+                        <p class="text-gray-500 text-center">Belum ada item. Tambahkan dari inventori.</p>
+                    </div>
+                    <div class="border-t pt-4">
+                        <div class="flex justify-between items-center mb-4">
+                            <span class="text-lg font-semibold text-gray-800">Total Harga:</span>
+                            <span id="total-price" class="text-2xl font-bold text-green-600">Rp 0</span>
+                        </div>
+                        <button id="finish-shopping-btn" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-6 rounded-lg transition duration-300 mb-2">Selesai Belanja</button>
+                        <button id="reset-btn" class="w-full bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300">Reset Kalkulator</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Receipt History Section -->
+        <div class="mt-12">
+            <h2 class="text-2xl font-semibold text-gray-800 mb-4">Riwayat Struk Belanja</h2>
+            <div id="receipt-history" class="space-y-6">
+                <!-- Receipts will be dynamically generated here -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Initial product data (loaded from localStorage if available, otherwise empty array)
+        let products = JSON.parse(localStorage.getItem('sembakoProducts')) || [];
+
+        // Cart for calculator
+        let cart = [];
+
+        // Receipt history
+        let receipts = JSON.parse(localStorage.getItem('receiptHistory')) || [];
+        let receiptCounter = receipts.length + 1;
+
+        // Function to save to localStorage
+        function saveProducts() {
+            localStorage.setItem('sembakoProducts', JSON.stringify(products));
+        }
+
+        function saveReceipts() {
+            localStorage.setItem('receiptHistory', JSON.stringify(receipts));
+        }
+
+        // Function to render inventory
+        function renderInventory() {
+            const list = document.getElementById('inventory-list');
+            list.innerHTML = '';
+            if (products.length === 0) {
+                list.innerHTML = '<p class="text-gray-500 text-center">Belum ada produk. Tambahkan produk baru di atas.</p>';
+            } else {
+                products.forEach((product, index) => {
+                    const card = `
+                        <div class="bg-white rounded-lg shadow-lg overflow-hidden hover:shadow-xl transition duration-300 animate-fade-in">
+                            <img src="${product.image}" alt="${product.name}" class="w-full h-32 object-cover">
+                            <div class="p-4">
+                                <h3 class="text-xl font-semibold text-gray-800 mb-2">${product.name}</h3>
+                                <p class="text-2xl font-bold text-green-600">Rp ${product.basePrice.toLocaleString('id-ID')}</p>
+                                <p class="text-sm text-gray-500 mb-4">Harga dasar</p>
+                                <div class="flex flex-col gap-2">
+                                    <input type="number" id="price-${index}" class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Harga baru (Rp)" min="0">
+                                    <button onclick="updatePrice(${index})" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300">Update Harga</button>
+                                </div>
+                                <div class="flex items-center gap-2 mt-4">
+                                    <input type="number" id="qty-add-${index}" class="w-20 px-2 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-green-500" placeholder="Qty" min="1" value="1">
+                                    <button onclick="addToCart(${index})" class="bg-green-500 hover:bg-green-600 text-white font-bold py-1 px-3 rounded-lg transition duration-300">+</button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    list.innerHTML += card;
+                });
+            }
+        }
+
+        // Function to render calculator
+        function renderCalculator() {
+            const calc = document.getElementById('calculator-items');
+            if (cart.length === 0) {
+                calc.innerHTML = '<p class="text-gray-500 text-center">Belum ada item. Tambahkan dari inventori.</p>';
+            } else {
+                calc.innerHTML = '';
+                cart.forEach((item, cartIndex) => {
+                    const itemHtml = `
+                        <div class="flex items-center justify-between mb-4 p-3 bg-gray-50 rounded-lg">
+                            <span class="font-medium text-gray-800">${item.name}</span>
+                            <div class="flex items-center gap-2">
+                                <input type="number" id="cart-qty-${cartIndex}" class="w-20 px-2 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-green-500" value="${item.qty}" min="1" onchange="updateCartQty(${cartIndex})">
+                                <span class="text-sm text-gray-600">x Rp ${item.price.toLocaleString('id-ID')} = Rp ${(item.qty * item.price).toLocaleString('id-ID')}</span>
+                                <button onclick="removeFromCart(${cartIndex})" class="bg-red-500 hover:bg-red-600 text-white font-bold py-1 px-2 rounded-lg transition duration-300">X</button>
+                            </div>
+                        </div>
+                    `;
+                    calc.innerHTML += itemHtml;
+                });
+            }
+            calculateTotal();
+        }
+
+        // Function to render receipt history
+        function renderReceiptHistory() {
+            const history = document.getElementById('receipt-history');
+            history.innerHTML = '';
+            receipts.forEach((receipt, index) => {
+                const receiptHtml = `
+                    <div class="bg-white rounded-lg shadow-lg p-6 animate-fade-in">
+                        <h3 class="text-xl font-semibold text-gray-800 mb-4">Struk Pembelian ${receipt.id}</h3>
+                        <p class="text-sm text-gray-500 mb-4">Tanggal: ${receipt.date}</p>
+                        <div class="space-y-2 mb-4">
+                            ${receipt.items.map(item => `
+                                <div class="flex justify-between">
+                                    <span>${item.name} (x${item.qty})</span>
+                                    <span>Rp ${(item.qty * item.price).toLocaleString('id-ID')}</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                        <div class="border-t pt-4 flex justify-between font-bold">
+                            <span>Total:</span>
+                            <span>Rp ${receipt.total.toLocaleString('id-ID')}</span>
+                        </div>
+                    </div>
+                `;
+                history.innerHTML += receiptHtml;
+            });
+        }
+
+        // Function to update individual product price
+        function updatePrice(index) {
+            const newPrice = parseFloat(document.getElementById(`price-${index}`).value);
+            if (!isNaN(newPrice) && newPrice >= 0) {
+                products[index].basePrice = newPrice;
+                saveProducts();
+                renderInventory();
+                // Update cart prices if product price changed
+                cart.forEach(cartItem => {
+                    if (cartItem.name === products[index].name) {
+                        cartItem.price = newPrice;
+                    }
+                });
+                renderCalculator();
+                document.getElementById(`price-${index}`).value = ''; // Clear input
+            } else {
+                alert('Masukkan harga yang valid!');
+            }
+        }
+
+        // Function to add to cart
+        function addToCart(index) {
+            const qty = parseInt(document.getElementById(`qty-add-${index}`).value) || 1;
+            const product = products[index];
+            const existingItem = cart.find(item => item.name === product.name);
+            if (existingItem) {
+                existingItem.qty += qty;
+            } else {
+                cart.push({ name: product.name, price: product.basePrice, qty: qty });
+            }
+            renderCalculator();
+        }
+
+        // Function to update cart quantity
+        function updateCartQty(cartIndex) {
+            const newQty = parseInt(document.getElementById(`cart-qty-${cartIndex}`).value) || 1;
+            cart[cartIndex].qty = newQty;
+            renderCalculator();
+        }
+
+        // Function to remove from cart
+        function removeFromCart(cartIndex) {
+            cart.splice(cartIndex, 1);
+            renderCalculator();
+        }
+
+        // Function to add new product
+        function addProduct() {
+            const name = document.getElementById('new-name').value.trim();
+            const price = parseFloat(document.getElementById('new-price').value);
+            const image = document.getElementById('new-image').value.trim() || "https://via.placeholder.com/150?text=Produk+Baru";
+
+            if (name && !isNaN(price) && price >= 0) {
+                products.push({ name, basePrice: price, image });
+                saveProducts();
+                renderInventory();
+                // Clear inputs
+                document.getElementById('new-name').value = '';
+                document.getElementById('new-price').value = '';
+                document.getElementById('new-image').value = '';
+            } else {
+                alert('Masukkan nama dan harga yang valid!');
+            }
+        }
+
+        // Function to reset all data
+        function resetAllData() {
+            if (confirm('Yakin reset semua data? Ini akan menghapus semua produk, struk, dan data tersimpan.')) {
+                localStorage.removeItem('sembakoProducts');
+                localStorage.removeItem('receiptHistory');
+                products = [];
+                cart = [];
+                receipts = [];
+                receiptCounter = 1;
+                renderInventory();
+                renderCalculator();
+                renderReceiptHistory();
+            }
+        }
+
+        // Calculate total price
+        function calculateTotal() {
+            let total = 0;
+            cart.forEach(item => {
+                total += item.qty * item.price;
+            });
+            document.getElementById('total-price').textContent = `Rp ${total.toLocaleString('id-ID')}`;
+        }
+
+        // Finish shopping and create receipt
+        function finishShopping() {
+            if (cart.length === 0) {
+                alert('Tidak ada item di kalkulator!');
+                return;
+            }
+            const total = cart.reduce((sum, item) => sum + item.qty * item.price, 0);
+            const receipt = {
+                id: receiptCounter++,
+                date: new Date().toLocaleString('id-ID'),
+                items: [...cart],
+                total: total
+            };
+            receipts.push(receipt);
+            saveReceipts();
+            renderReceiptHistory();
+            resetCalculator();
+        }
+
+        // Reset calculator
+        function resetCalculator() {
+            cart = [];
+            renderCalculator();
+        }
+
+        // Initial render
+        renderInventory();
+        renderCalculator();
+        renderReceiptHistory();
+
+        // Add product event
+        document.getElementById('add-product-btn').addEventListener('click', addProduct);
+
+        // Reset all data event
+        document.getElementById('reset-all-btn').addEventListener('click', resetAllData);
+
+        // Finish shopping event
+        document.getElementById('finish-shopping-btn').addEventListener('click', finishShopping);
+
+        // Reset calculator event
+        document.getElementById('reset-btn').addEventListener('click', resetCalculator);
+    </script>
+</body>
+</html>
